@@ -1,42 +1,35 @@
 import os
+import re
+from groq import Groq
 from dotenv import load_dotenv
 from core.scoring import calculate_trust_score
 
 load_dotenv()
 
-api_key = os.getenv("GROQ_API_KEY")
-print(f"API KEY FOUND: {bool(api_key)}")
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-from langchain_groq import ChatGroq
-
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY")
-)
+def call_llm(prompt: str) -> str:
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=1000
+    )
+    return response.choices[0].message.content
 
 def run_trust_agent(agency: dict) -> dict:
-    # Step 1: Calculate scores
     score_data = calculate_trust_score(agency)
 
-    # Step 2: Sentiment analysis
-    clean_reviews = [
-        r["text"] for r in agency["reviews"]
-    ]
+    clean_reviews = [r["text"] for r in agency["reviews"]]
     reviews_text = "\n".join(clean_reviews) if clean_reviews else "No verified reviews."
 
-    sentiment_prompt = f"""
+    sentiment = call_llm(f"""
 You are analyzing reviews for a recruitment agency called "{agency['name']}".
-
 Reviews:
 {reviews_text}
+In 2 sentences max, describe the overall sentiment. Be direct and factual.
+""")
 
-In 2 sentences max, describe the overall sentiment of these reviews.
-Be direct and factual.
-"""
-    sentiment = llm.invoke(sentiment_prompt).content
-
-    # Step 3: Generate reasoning
-    reasoning_prompt = f"""
+    reasoning = call_llm(f"""
 You are an AI trust analyst for JSO, a job search platform.
 
 Agency: {agency['name']}
@@ -64,12 +57,9 @@ Format exactly like this:
 EXPLANATION: [your explanation]
 RED_FLAGS: [flag1 | flag2 | flag3]
 RECOMMENDATION: [TRUSTED/CAUTION/AVOID]
-"""
-    reasoning = llm.invoke(reasoning_prompt).content
+""")
 
-    # Step 4: Parse response
     def extract(label, text):
-        import re
         match = re.search(rf"{label}:(.*?)(?=\n[A-Z_]+:|$)", text, re.DOTALL)
         return match.group(1).strip() if match else ""
 
