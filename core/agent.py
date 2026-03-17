@@ -4,6 +4,9 @@ from core.scoring import calculate_trust_score
 
 load_dotenv()
 
+api_key = os.getenv("GROQ_API_KEY")
+print(f"API KEY FOUND: {bool(api_key)}")
+
 from langchain_groq import ChatGroq
 
 llm = ChatGroq(
